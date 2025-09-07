@@ -222,6 +222,15 @@
             background: #1e7e34;
         }
 
+        .btn.warning {
+            background: #ffc107;
+            color: #212529;
+        }
+
+        .btn.warning:hover {
+            background: #e0a800;
+        }
+
         .btn.small {
             padding: 8px 12px;
             font-size: 12px;
@@ -271,6 +280,37 @@
             gap: 10px;
             justify-content: space-between;
             margin-top: 10px;
+        }
+
+        .import-controls {
+            display: none;
+            margin-top: 15px;
+            padding: 15px;
+            background: #d1ecf1;
+            border-radius: 10px;
+            border: 1px solid #bee5eb;
+        }
+
+        .import-controls.active {
+            display: block;
+        }
+
+        .import-textarea {
+            width: 100%;
+            height: 150px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            resize: vertical;
+            margin-bottom: 10px;
+        }
+
+        .import-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: space-between;
         }
 
         .sidebar {
@@ -351,6 +391,41 @@
             align-items: center;
         }
 
+        .export-import-section {
+            margin-bottom: 20px;
+        }
+
+        .export-import-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .alert {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .alert.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .alert.warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
         @media (max-width: 900px) {
             .input-group {
                 flex-direction: column;
@@ -373,7 +448,7 @@
                 
                 <div class="messages-container" id="messagesContainer">
                     <div class="status" id="statusMessage">
-                        Commencez par créer votre premier message...
+                        Commencez par créer votre premier message ou importez un dialogue existant...
                     </div>
                 </div>
                 
@@ -402,6 +477,7 @@
                     <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
                         <button class="btn secondary" onclick="addChoicePoint()">+ Choix Multiple</button>
                         <button class="btn success" onclick="finishBranch()">Finir Branche</button>
+                        <button class="btn warning" onclick="showImportDialog()">📥 Importer</button>
                         <button class="btn danger" onclick="clearAll()">Tout Effacer</button>
                     </div>
                     
@@ -416,21 +492,37 @@
                             <button class="btn secondary" onclick="cancelChoice()">Annuler</button>
                         </div>
                     </div>
+
+                    <div class="import-controls" id="importControls">
+                        <h4>Importer un dialogue JSON :</h4>
+                        <div id="importAlert"></div>
+                        <textarea class="import-textarea" id="importTextarea" placeholder="Collez votre JSON de dialogue ici..."></textarea>
+                        <div class="import-actions">
+                            <button class="btn success" onclick="importJSON()">📥 Importer</button>
+                            <button class="btn secondary" onclick="cancelImport()">Annuler</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
         
         <div class="sidebar">
+            <div class="export-import-section">
+                <h3>Import/Export JSON</h3>
+                <div class="export-import-buttons">
+                    <button class="btn" onclick="exportJSON()">📤 Exporter JSON</button>
+                    <button class="btn secondary" onclick="copyToClipboard()">📋 Copier</button>
+                </div>
+                <div id="exportAlert"></div>
+                <textarea class="json-output" id="jsonOutput" readonly placeholder="Le JSON de l'arbre complet apparaîtra ici..."></textarea>
+            </div>
+
             <h3>Arbre de Dialogue</h3>
             <div id="treeView" class="tree-view">
                 <div class="tree-node current-path">
                     <div class="tree-message">Racine du dialogue</div>
                 </div>
             </div>
-            
-            <h3 style="margin-top: 20px;">Export JSON</h3>
-            <button class="btn" onclick="exportJSON()">Générer JSON</button>
-            <textarea class="json-output" id="jsonOutput" readonly placeholder="Le JSON de l'arbre complet apparaîtra ici..."></textarea>
         </div>
     </div>
 
@@ -456,6 +548,140 @@
                 node = node.branches[currentPath[i]];
             }
             return node;
+        }
+        
+        // Afficher une alerte
+        function showAlert(containerId, message, type = 'info') {
+            const container = document.getElementById(containerId);
+            container.innerHTML = `<div class="alert ${type}">${message}</div>`;
+            setTimeout(() => {
+                container.innerHTML = '';
+            }, 5000);
+        }
+
+        // Afficher le dialogue d'importation
+        function showImportDialog() {
+            const importControls = document.getElementById('importControls');
+            importControls.classList.add('active');
+            document.getElementById('importTextarea').value = '';
+            document.getElementById('importAlert').innerHTML = '';
+        }
+
+        // Annuler l'importation
+        function cancelImport() {
+            document.getElementById('importControls').classList.remove('active');
+            document.getElementById('importTextarea').value = '';
+            document.getElementById('importAlert').innerHTML = '';
+        }
+
+        // Importer le JSON
+        function importJSON() {
+            const textarea = document.getElementById('importTextarea');
+            const jsonText = textarea.value.trim();
+            
+            if (!jsonText) {
+                showAlert('importAlert', 'Veuillez coller du JSON dans la zone de texte.', 'warning');
+                return;
+            }
+
+            try {
+                const importedData = JSON.parse(jsonText);
+                
+                // Vérifier que la structure est valide
+                if (!importedData.root || typeof importedData.root !== 'object') {
+                    throw new Error('Structure JSON invalide : propriété "root" manquante');
+                }
+
+                const root = importedData.root;
+                if (!Array.isArray(root.messages)) {
+                    throw new Error('Structure JSON invalide : "root.messages" doit être un tableau');
+                }
+
+                if (root.branches && typeof root.branches !== 'object') {
+                    throw new Error('Structure JSON invalide : "root.branches" doit être un objet');
+                }
+
+                // Si on arrive ici, le JSON semble valide
+                const confirmImport = confirm(
+                    'Voulez-vous vraiment importer ce dialogue ?\n' +
+                    'Cela remplacera complètement le dialogue actuel.\n\n' +
+                    'Messages dans la racine : ' + root.messages.length + '\n' +
+                    'Branches : ' + (root.branches ? Object.keys(root.branches).length : 0)
+                );
+
+                if (confirmImport) {
+                    // Sauvegarder l'ancien dialogue au cas où
+                    const oldTree = JSON.stringify(dialogueTree);
+                    
+                    try {
+                        // Importer le nouveau dialogue
+                        dialogueTree = importedData;
+                        currentPath = ['root'];
+                        
+                        // Mettre à jour le compteur d'ID des messages
+                        updateMessageIdCounter();
+                        
+                        // Mettre à jour l'affichage
+                        updateDisplay();
+                        
+                        // Masquer le dialogue d'importation
+                        cancelImport();
+                        
+                        showAlert('exportAlert', 'Dialogue importé avec succès !', 'success');
+                        
+                    } catch (error) {
+                        // Restaurer l'ancien dialogue en cas d'erreur
+                        dialogueTree = JSON.parse(oldTree);
+                        throw error;
+                    }
+                }
+
+            } catch (error) {
+                console.error('Erreur d\'importation:', error);
+                showAlert('importAlert', 'Erreur lors de l\'importation : ' + error.message, 'error');
+            }
+        }
+
+        // Mettre à jour le compteur d'ID des messages
+        function updateMessageIdCounter() {
+            let maxId = 0;
+            
+            function traverseNode(node) {
+                if (node.messages) {
+                    node.messages.forEach(msg => {
+                        if (msg.id && typeof msg.id === 'number' && msg.id > maxId) {
+                            maxId = msg.id;
+                        }
+                    });
+                }
+                
+                if (node.branches) {
+                    Object.values(node.branches).forEach(branch => {
+                        traverseNode(branch);
+                    });
+                }
+            }
+            
+            traverseNode(dialogueTree.root);
+            messageIdCounter = maxId;
+        }
+
+        // Copier le JSON dans le presse-papiers
+        async function copyToClipboard() {
+            const jsonOutput = document.getElementById('jsonOutput');
+            if (!jsonOutput.value) {
+                exportJSON(); // Générer le JSON s'il n'existe pas
+            }
+            
+            try {
+                await navigator.clipboard.writeText(jsonOutput.value);
+                showAlert('exportAlert', 'JSON copié dans le presse-papiers !', 'success');
+            } catch (error) {
+                // Fallback pour les navigateurs plus anciens
+                jsonOutput.select();
+                document.execCommand('copy');
+                showAlert('exportAlert', 'JSON copié dans le presse-papiers !', 'success');
+            }
         }
         
         // Définir la date/heure actuelle
@@ -771,6 +997,7 @@
                 messageIdCounter = 0;
                 updateDisplay();
                 document.getElementById('jsonOutput').value = '';
+                showAlert('exportAlert', 'Dialogue effacé avec succès !', 'warning');
             }
         }
         
@@ -779,6 +1006,7 @@
             const jsonOutput = document.getElementById('jsonOutput');
             const formattedJSON = JSON.stringify(dialogueTree, null, 2);
             jsonOutput.value = formattedJSON;
+            showAlert('exportAlert', 'JSON exporté avec succès !', 'success');
         }
         
         // Permettre d'envoyer avec Entrée

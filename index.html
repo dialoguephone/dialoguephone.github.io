@@ -24,7 +24,7 @@
         .container {
             display: flex;
             gap: 20px;
-            max-width: 1200px;
+            max-width: 1400px;
             width: 100%;
         }
 
@@ -273,6 +273,16 @@
             border: 1px solid #ddd;
             border-radius: 5px;
             font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .choice-input input {
+            flex: 1;
+            border: none;
+            outline: none;
+            padding: 5px;
         }
 
         .choice-actions {
@@ -314,7 +324,7 @@
         }
 
         .sidebar {
-            width: 400px;
+            width: 450px;
             background: white;
             border-radius: 15px;
             padding: 20px;
@@ -340,18 +350,27 @@
         }
 
         .tree-node {
-            margin-left: 20px;
-            margin-bottom: 10px;
+            margin-left: 0px;
+            margin-bottom: 5px;
             padding: 10px;
             background: #f8f9fa;
             border-radius: 5px;
             border-left: 3px solid #007AFF;
             font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tree-node:hover {
+            background: #e9ecef;
         }
 
         .tree-message {
             font-weight: bold;
             margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
         .tree-choices {
@@ -371,8 +390,8 @@
         }
 
         .current-path {
-            background: #d4edda;
-            border-left-color: #28a745;
+            background: #d4edda !important;
+            border-left-color: #28a745 !important;
         }
 
         .status {
@@ -424,6 +443,66 @@
             background: #fff3cd;
             color: #856404;
             border: 1px solid #ffeaa7;
+        }
+
+        .choice-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 5px 0;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: white;
+        }
+
+        .choice-item input {
+            flex: 1;
+            border: none;
+            outline: none;
+            padding: 5px;
+        }
+
+        .choice-item .remove-choice {
+            color: #dc3545;
+            cursor: pointer;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        .choice-item .remove-choice:hover {
+            background: #dc3545;
+            color: white;
+        }
+
+        .add-choice-btn {
+            margin: 10px 0;
+        }
+
+        .tree-depth-indicator {
+            display: inline-block;
+            width: 20px;
+            text-align: center;
+            color: #999;
+        }
+
+        .path-info {
+            font-size: 11px;
+            color: #666;
+            margin-top: 3px;
+        }
+
+        @media (max-width: 1200px) {
+            .container {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .sidebar {
+                width: 100%;
+                max-width: 600px;
+            }
         }
 
         @media (max-width: 900px) {
@@ -482,11 +561,11 @@
                     </div>
                     
                     <div class="choice-controls" id="choiceControls">
-                        <h4>Créer un point de choix pour le Personnage B :</h4>
-                        <input type="text" class="choice-input" id="choice1" placeholder="Option 1">
-                        <input type="text" class="choice-input" id="choice2" placeholder="Option 2">
-                        <input type="text" class="choice-input" id="choice3" placeholder="Option 3">
-                        <input type="text" class="choice-input" id="choice4" placeholder="Option 4">
+                        <h4>Créer un point de choix :</h4>
+                        <div id="choicesList">
+                            <!-- Les choix seront ajoutés dynamiquement ici -->
+                        </div>
+                        <button class="btn small secondary add-choice-btn" onclick="addNewChoice()">+ Ajouter un choix</button>
                         <div class="choice-actions">
                             <button class="btn" onclick="saveChoicePoint()">Sauvegarder Choix</button>
                             <button class="btn secondary" onclick="cancelChoice()">Annuler</button>
@@ -518,6 +597,9 @@
             </div>
 
             <h3>Arbre de Dialogue</h3>
+            <div class="path-info" id="pathInfo">
+                Profondeur actuelle: 0 | Messages dans cette branche: 0
+            </div>
             <div id="treeView" class="tree-view">
                 <div class="tree-node current-path">
                     <div class="tree-message">Racine du dialogue</div>
@@ -540,6 +622,7 @@
         // État actuel de navigation
         let currentPath = ['root'];
         let messageIdCounter = 0;
+        let choiceCounter = 0;
         
         // Obtenir le nœud actuel
         function getCurrentNode() {
@@ -557,6 +640,48 @@
             setTimeout(() => {
                 container.innerHTML = '';
             }, 5000);
+        }
+
+        // Gestion des choix multiples dynamiques
+        function addNewChoice() {
+            const choicesList = document.getElementById('choicesList');
+            const choiceIndex = choicesList.children.length;
+            
+            const choiceItem = document.createElement('div');
+            choiceItem.className = 'choice-item';
+            choiceItem.innerHTML = `
+                <span style="min-width: 20px; font-weight: bold;">${choiceIndex + 1}.</span>
+                <input type="text" placeholder="Entrez le texte du choix..." data-index="${choiceIndex}">
+                <span class="remove-choice" onclick="removeChoice(this)" title="Supprimer ce choix">×</span>
+            `;
+            
+            choicesList.appendChild(choiceItem);
+            
+            // Focus sur le nouveau champ
+            choiceItem.querySelector('input').focus();
+        }
+
+        function removeChoice(element) {
+            const choiceItem = element.parentElement;
+            choiceItem.remove();
+            
+            // Renuméroter les choix restants
+            const choicesList = document.getElementById('choicesList');
+            Array.from(choicesList.children).forEach((item, index) => {
+                const span = item.querySelector('span');
+                const input = item.querySelector('input');
+                span.textContent = `${index + 1}.`;
+                input.setAttribute('data-index', index);
+            });
+        }
+
+        function initializeChoices() {
+            const choicesList = document.getElementById('choicesList');
+            choicesList.innerHTML = '';
+            
+            // Ajouter 2 choix par défaut
+            addNewChoice();
+            addNewChoice();
         }
 
         // Afficher le dialogue d'importation
@@ -722,11 +847,25 @@
             const breadcrumb = document.getElementById('breadcrumb');
             const backBtn = document.getElementById('backBtn');
             const statusMessage = document.getElementById('statusMessage');
+            const pathInfo = document.getElementById('pathInfo');
             
             // Mettre à jour le titre et le fil d'Ariane
-            headerTitle.textContent = `Dialogue - ${currentPath.join(' → ')}`;
-            breadcrumb.textContent = currentPath.join(' → ');
+            const pathDisplay = currentPath.map((step, index) => {
+                if (step === 'root') return 'Racine';
+                const parentNode = getNodeAtPath(currentPath.slice(0, index));
+                if (parentNode && parentNode.choices) {
+                    const choiceIndex = parseInt(step.replace('choice_', ''));
+                    return `"${parentNode.choices[choiceIndex] || step}"`;
+                }
+                return step;
+            }).join(' → ');
+            
+            headerTitle.textContent = `Dialogue - ${pathDisplay}`;
+            breadcrumb.textContent = pathDisplay;
             backBtn.disabled = currentPath.length === 1;
+            
+            // Mettre à jour les informations de chemin
+            pathInfo.textContent = `Profondeur actuelle: ${currentPath.length - 1} | Messages dans cette branche: ${node.messages.length}`;
             
             // Effacer les messages actuels
             messagesContainer.innerHTML = '';
@@ -751,6 +890,18 @@
             
             // Faire défiler vers le bas
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function getNodeAtPath(path) {
+            let node = dialogueTree.root;
+            for (let i = 1; i < path.length; i++) {
+                if (node.branches && node.branches[path[i]]) {
+                    node = node.branches[path[i]];
+                } else {
+                    return null;
+                }
+            }
+            return node;
         }
         
         // Afficher un message
@@ -849,16 +1000,21 @@
         function addChoicePoint() {
             const choiceControls = document.getElementById('choiceControls');
             choiceControls.classList.add('active');
+            initializeChoices();
         }
         
         // Sauvegarder le point de choix
         function saveChoicePoint() {
-            const choice1 = document.getElementById('choice1').value.trim();
-            const choice2 = document.getElementById('choice2').value.trim();
-            const choice3 = document.getElementById('choice3').value.trim();
-            const choice4 = document.getElementById('choice4').value.trim();
+            const choicesList = document.getElementById('choicesList');
+            const choiceInputs = choicesList.querySelectorAll('input');
+            const choices = [];
             
-            const choices = [choice1, choice2, choice3, choice4].filter(choice => choice);
+            choiceInputs.forEach(input => {
+                const value = input.value.trim();
+                if (value) {
+                    choices.push(value);
+                }
+            });
             
             if (choices.length < 2) {
                 alert('Veuillez entrer au moins 2 options de choix.');
@@ -869,7 +1025,7 @@
             const node = getCurrentNode();
             node.choices = choices;
             
-            // Initialiser les branches vides
+            // Initialiser les branches vides pour chaque choix
             choices.forEach((choice, index) => {
                 if (!node.branches[`choice_${index}`]) {
                     node.branches[`choice_${index}`] = {
@@ -883,10 +1039,6 @@
             });
             
             // Réinitialiser et masquer les contrôles de choix
-            document.getElementById('choice1').value = '';
-            document.getElementById('choice2').value = '';
-            document.getElementById('choice3').value = '';
-            document.getElementById('choice4').value = '';
             document.getElementById('choiceControls').classList.remove('active');
             
             // Mettre à jour l'affichage
@@ -894,10 +1046,6 @@
         }
         
         function cancelChoice() {
-            document.getElementById('choice1').value = '';
-            document.getElementById('choice2').value = '';
-            document.getElementById('choice3').value = '';
-            document.getElementById('choice4').value = '';
             document.getElementById('choiceControls').classList.remove('active');
         }
         
@@ -944,26 +1092,36 @@
             
             let nodeText = path[path.length - 1];
             if (node.choiceText) {
-                nodeText = node.choiceText;
+                nodeText = `${node.choiceText.substring(0, 50)}${node.choiceText.length > 50 ? '...' : ''}`;
+            } else if (path[path.length - 1] === 'root') {
+                nodeText = 'Racine';
             }
+            
+            const depthIndicator = '└─'.repeat(depth);
             
             nodeDiv.innerHTML = `
                 <div class="tree-message">
-                    ${nodeText} (${node.messages.length} messages)
-                    ${node.finished ? ' ✓' : ''}
+                    <span>
+                        <span class="tree-depth-indicator">${depthIndicator}</span>
+                        ${nodeText} (${node.messages.length} msg${node.messages.length !== 1 ? 's' : ''})
+                        ${node.finished ? ' ✅' : ''}
+                        ${node.choices ? ` [${node.choices.length} choix]` : ''}
+                    </span>
+                    <small style="color: #999;">Prof. ${depth}</small>
                 </div>
             `;
             
-            nodeDiv.style.marginLeft = (depth * 20) + 'px';
-            nodeDiv.onclick = () => {
+            nodeDiv.style.marginLeft = (depth * 15) + 'px';
+            nodeDiv.onclick = (e) => {
+                e.stopPropagation();
                 currentPath = [...path];
                 updateDisplay();
             };
             
             container.appendChild(nodeDiv);
             
-            // Afficher les choix et branches enfants
-            if (node.choices) {
+            // Afficher les branches enfants
+            if (node.choices && node.branches) {
                 node.choices.forEach((choice, index) => {
                     const choiceKey = `choice_${index}`;
                     if (node.branches[choiceKey]) {

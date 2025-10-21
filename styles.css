@@ -64,6 +64,13 @@ body {
     margin-bottom: 15px;
     display: flex;
     align-items: flex-end;
+    position: relative;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.message:hover {
+    transform: translateY(-2px);
 }
 
 .message.sent {
@@ -120,6 +127,7 @@ body {
     margin: 5px 0;
     cursor: pointer;
     transition: all 0.2s;
+    position: relative;
 }
 
 .choice-bubble:hover {
@@ -133,7 +141,45 @@ body {
     border-color: #228B22;
 }
 
-/* CORRECTION PRINCIPALE : Conteneur des contrôles avec scroll */
+.choice-bubble.fake-choice {
+    background: #FF9966 !important;
+    border: 2px dashed #FF6633;
+    position: relative;
+}
+
+.choice-bubble.fake-choice::before {
+    content: "👻";
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 14px;
+}
+
+.choice-bubble.fake-choice:hover {
+    background: #FF8855 !important;
+}
+
+.choice-bubble.fake-choice.selected {
+    background: #FF6633 !important;
+    color: white !important;
+    border-color: #CC5522;
+}
+
+.edit-icon {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    font-size: 10px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    cursor: pointer;
+}
+
+.choice-bubble:hover .edit-icon {
+    opacity: 0.7;
+}
+
 .controls {
     background: white;
     border-top: 1px solid #e0e0e0;
@@ -143,7 +189,6 @@ body {
     padding: 15px 20px;
 }
 
-/* Style pour la barre de défilement du conteneur controls */
 .controls::-webkit-scrollbar {
     width: 6px;
 }
@@ -177,6 +222,8 @@ body {
     font-size: 14px;
     outline: none;
     min-width: 200px;
+    resize: vertical;
+    font-family: inherit;
 }
 
 .datetime-input {
@@ -248,6 +295,16 @@ body {
     background: #e0a800;
 }
 
+.btn.fake-choice-btn {
+    background: linear-gradient(135deg, #FF9966 0%, #FF6633 100%);
+    color: white;
+    font-weight: bold;
+}
+
+.btn.fake-choice-btn:hover {
+    background: linear-gradient(135deg, #FF8855 0%, #FF5522 100%);
+}
+
 .btn.small {
     padding: 8px 12px;
     font-size: 12px;
@@ -270,38 +327,70 @@ body {
     font-family: monospace;
 }
 
-.choice-controls {
+.choice-controls, .fake-choice-controls, .finish-fake-choice-controls, 
+.edit-message-controls, .edit-choice-controls {
     display: none;
     margin-top: 15px;
     padding: 15px;
-    background: #fff3cd;
     border-radius: 10px;
-    border: 1px solid #ffeaa7;
+    border: 1px solid;
 }
 
-.choice-controls.active {
+.choice-controls {
+    background: #fff3cd;
+    border-color: #ffeaa7;
+}
+
+.fake-choice-controls {
+    background: #ffe0cc;
+    border-color: #ffccaa;
+}
+
+.finish-fake-choice-controls {
+    background: #e0f7ff;
+    border-color: #b3e5fc;
+}
+
+.edit-message-controls {
+    background: #e8f5e9;
+    border-color: #c8e6c9;
+}
+
+.edit-choice-controls {
+    background: #f3e5f5;
+    border-color: #e1bee7;
+}
+
+.choice-controls.active, .fake-choice-controls.active, 
+.finish-fake-choice-controls.active, .edit-message-controls.active,
+.edit-choice-controls.active {
     display: block;
 }
 
-/* CORRECTION : Conteneur des choix avec scroll interne */
-#choicesList {
+.fake-choice-info {
+    font-size: 12px;
+    color: #666;
+    font-style: italic;
+    margin-bottom: 10px;
+}
+
+#choicesList, #fakeChoicesList {
     max-height: 200px;
     overflow-y: auto;
     margin: 10px 0;
     padding-right: 5px;
 }
 
-/* Style pour la barre de défilement de la liste des choix */
-#choicesList::-webkit-scrollbar {
+#choicesList::-webkit-scrollbar, #fakeChoicesList::-webkit-scrollbar {
     width: 4px;
 }
 
-#choicesList::-webkit-scrollbar-track {
+#choicesList::-webkit-scrollbar-track, #fakeChoicesList::-webkit-scrollbar-track {
     background: #f1f1f1;
     border-radius: 2px;
 }
 
-#choicesList::-webkit-scrollbar-thumb {
+#choicesList::-webkit-scrollbar-thumb, #fakeChoicesList::-webkit-scrollbar-thumb {
     background: #c1c1c1;
     border-radius: 2px;
 }
@@ -364,6 +453,15 @@ body {
     justify-content: space-between;
 }
 
+.reconnect-select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    margin: 10px 0;
+    font-size: 14px;
+}
+
 .sidebar {
     width: 450px;
     background: white;
@@ -404,6 +502,15 @@ body {
 
 .tree-node:hover {
     background: #e9ecef;
+}
+
+.tree-node.fake-choice-node {
+    background: #ffe0cc;
+    border-left-color: #FF6633;
+}
+
+.tree-node.fake-choice-node:hover {
+    background: #ffccaa;
 }
 
 .tree-message {
@@ -534,7 +641,6 @@ body {
     margin-top: 3px;
 }
 
-/* CORRECTION : Indicateur visuel pour le scroll */
 .controls-scroll-indicator {
     position: absolute;
     right: 25px;

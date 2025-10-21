@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="styles.css">
     <title>Éditeur d'Arbre de Dialogue</title>
-    <style>
-    </style>
 </head>
 <body>
     <div class="container">
@@ -46,11 +44,13 @@
                     
                     <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
                         <button class="btn secondary" onclick="addChoicePoint()">+ Choix Multiple</button>
+                        <button class="btn fake-choice-btn" onclick="addFakeChoice()">👻 Fake Choice</button>
                         <button class="btn success" onclick="finishBranch()">Finir Branche</button>
                         <button class="btn warning" onclick="showImportDialog()">📥 Importer</button>
                         <button class="btn danger" onclick="clearAll()">Tout Effacer</button>
                     </div>
                     
+                    <!-- Contrôles pour choix normaux -->
                     <div class="choice-controls" id="choiceControls">
                         <h4>Créer un point de choix :</h4>
                         <div id="choicesList">
@@ -60,6 +60,61 @@
                         <div class="choice-actions">
                             <button class="btn" onclick="saveChoicePoint()">Sauvegarder Choix</button>
                             <button class="btn secondary" onclick="cancelChoice()">Annuler</button>
+                        </div>
+                    </div>
+
+                    <!-- Contrôles pour fake choices -->
+                    <div class="fake-choice-controls" id="fakeChoiceControls">
+                        <h4>🎭 Créer un Fake Choice :</h4>
+                        <p class="fake-choice-info">Un fake choice revient à l'histoire principale après quelques messages</p>
+                        <div id="fakeChoicesList">
+                            <!-- Les fake choices seront ajoutés dynamiquement ici -->
+                        </div>
+                        <button class="btn small fake-choice-btn add-choice-btn" onclick="addNewFakeChoice()">+ Ajouter un fake choice</button>
+                        <div class="choice-actions">
+                            <button class="btn fake-choice-btn" onclick="saveFakeChoicePoint()">Sauvegarder Fake Choices</button>
+                            <button class="btn secondary" onclick="cancelFakeChoice()">Annuler</button>
+                        </div>
+                    </div>
+
+                    <!-- Contrôles pour finir un fake choice -->
+                    <div class="finish-fake-choice-controls" id="finishFakeChoiceControls">
+                        <h4>🔚 Finir le Fake Choice</h4>
+                        <p>Choisissez le message où reconnecter :</p>
+                        <select class="reconnect-select" id="reconnectSelect">
+                            <!-- Options remplies dynamiquement -->
+                        </select>
+                        <div class="choice-actions">
+                            <button class="btn fake-choice-btn" onclick="saveReconnection()">Reconnecter</button>
+                            <button class="btn secondary" onclick="cancelReconnection()">Annuler</button>
+                        </div>
+                    </div>
+
+                    <!-- Contrôles pour éditer un message -->
+                    <div class="edit-message-controls" id="editMessageControls">
+                        <h4>✏️ Éditer le message</h4>
+                        <div class="input-group">
+                            <select class="character-select" id="editCharacterSelect">
+                                <option value="A">Personnage A</option>
+                                <option value="B">Personnage B</option>
+                            </select>
+                            <textarea class="message-input" id="editMessageInput" placeholder="Texte du message..." rows="3"></textarea>
+                            <input type="datetime-local" class="datetime-input" id="editDatetimeInput" title="Date et heure du message">
+                        </div>
+                        <div class="choice-actions">
+                            <button class="btn" onclick="saveEditedMessage()">Sauvegarder</button>
+                            <button class="btn danger" onclick="deleteMessage()">Supprimer</button>
+                            <button class="btn secondary" onclick="cancelEditMessage()">Annuler</button>
+                        </div>
+                    </div>
+
+                    <!-- Contrôles pour éditer un choix -->
+                    <div class="edit-choice-controls" id="editChoiceControls">
+                        <h4>✏️ Éditer le choix</h4>
+                        <input type="text" class="message-input" id="editChoiceInput" placeholder="Texte du choix...">
+                        <div class="choice-actions">
+                            <button class="btn" onclick="saveEditedChoice()">Sauvegarder</button>
+                            <button class="btn secondary" onclick="cancelEditChoice()">Annuler</button>
                         </div>
                     </div>
 
@@ -73,7 +128,6 @@
                         </div>
                     </div>
                     
-                    <!-- Indicateur de scroll -->
                     <div class="controls-scroll-indicator">↕ Défilez pour plus d'options</div>
                 </div>
             </div>

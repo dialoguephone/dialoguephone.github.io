@@ -12,6 +12,8 @@ let dialogueTree = {
 let currentPath = ['root'];
 let messageIdCounter = 0;
 let choiceCounter = 0;
+let editingMessageId = null;
+let editingChoiceIndex = null;
 
 // Obtenir le nœud actuel
 function getCurrentNode() {
@@ -31,7 +33,7 @@ function showAlert(containerId, message, type = 'info') {
     }, 5000);
 }
 
-// Gestion des choix multiples dynamiques
+// ============ GESTION DES CHOIX NORMAUX ============
 function addNewChoice() {
     const choicesList = document.getElementById('choicesList');
     const choiceIndex = choicesList.children.length;
@@ -45,11 +47,7 @@ function addNewChoice() {
     `;
     
     choicesList.appendChild(choiceItem);
-    
-    // Focus sur le nouveau champ
     choiceItem.querySelector('input').focus();
-    
-    // Faire défiler vers le nouveau choix
     choiceItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
@@ -57,7 +55,6 @@ function removeChoice(element) {
     const choiceItem = element.parentElement;
     choiceItem.remove();
     
-    // Renuméroter les choix restants
     const choicesList = document.getElementById('choicesList');
     Array.from(choicesList.children).forEach((item, index) => {
         const span = item.querySelector('span');
@@ -70,33 +67,359 @@ function removeChoice(element) {
 function initializeChoices() {
     const choicesList = document.getElementById('choicesList');
     choicesList.innerHTML = '';
-    
-    // Ajouter 2 choix par défaut
     addNewChoice();
     addNewChoice();
 }
 
-// Afficher le dialogue d'importation
+function addChoicePoint() {
+    const choiceControls = document.getElementById('choiceControls');
+    choiceControls.classList.add('active');
+    initializeChoices();
+    
+    setTimeout(() => {
+        choiceControls.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+}
+
+function saveChoicePoint() {
+    const choicesList = document.getElementById('choicesList');
+    const choiceInputs = choicesList.querySelectorAll('input');
+    const choices = [];
+    
+    choiceInputs.forEach(input => {
+        const value = input.value.trim();
+        if (value) {
+            choices.push(value);
+        }
+    });
+    
+    if (choices.length < 2) {
+        alert('Veuillez entrer au moins 2 options de choix.');
+        return;
+    }
+    
+    const node = getCurrentNode();
+    node.choices = choices;
+    
+    choices.forEach((choice, index) => {
+        if (!node.branches[`choice_${index}`]) {
+            node.branches[`choice_${index}`] = {
+                id: `choice_${index}`,
+                choiceText: choice,
+                messages: [],
+                choices: null,
+                branches: {}
+            };
+        }
+    });
+    
+    document.getElementById('choiceControls').classList.remove('active');
+    updateDisplay();
+}
+
+function cancelChoice() {
+    document.getElementById('choiceControls').classList.remove('active');
+}
+
+// ============ GESTION DES FAKE CHOICES ============
+function addNewFakeChoice() {
+    const fakeChoicesList = document.getElementById('fakeChoicesList');
+    const choiceIndex = fakeChoicesList.children.length;
+    
+    const choiceItem = document.createElement('div');
+    choiceItem.className = 'choice-item';
+    choiceItem.innerHTML = `
+        <span style="min-width: 20px; font-weight: bold;">👻 ${choiceIndex + 1}.</span>
+        <input type="text" placeholder="Entrez le texte du fake choice..." data-index="${choiceIndex}">
+        <span class="remove-choice" onclick="removeFakeChoice(this)" title="Supprimer ce fake choice">×</span>
+    `;
+    
+    fakeChoicesList.appendChild(choiceItem);
+    choiceItem.querySelector('input').focus();
+    choiceItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function removeFakeChoice(element) {
+    const choiceItem = element.parentElement;
+    choiceItem.remove();
+    
+    const fakeChoicesList = document.getElementById('fakeChoicesList');
+    Array.from(fakeChoicesList.children).forEach((item, index) => {
+        const span = item.querySelector('span');
+        const input = item.querySelector('input');
+        span.textContent = `👻 ${index + 1}.`;
+        input.setAttribute('data-index', index);
+    });
+}
+
+function initializeFakeChoices() {
+    const fakeChoicesList = document.getElementById('fakeChoicesList');
+    fakeChoicesList.innerHTML = '';
+    addNewFakeChoice();
+}
+
+function addFakeChoice() {
+    const fakeChoiceControls = document.getElementById('fakeChoiceControls');
+    fakeChoiceControls.classList.add('active');
+    initializeFakeChoices();
+    
+    setTimeout(() => {
+        fakeChoiceControls.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+}
+
+function saveFakeChoicePoint() {
+    const fakeChoicesList = document.getElementById('fakeChoicesList');
+    const choiceInputs = fakeChoicesList.querySelectorAll('input');
+    const fakeChoices = [];
+    
+    choiceInputs.forEach(input => {
+        const value = input.value.trim();
+        if (value) {
+            fakeChoices.push(value);
+        }
+    });
+    
+    if (fakeChoices.length < 1) {
+        alert('Veuillez entrer au moins 1 fake choice.');
+        return;
+    }
+    
+    const node = getCurrentNode();
+    if (!node.choices) {
+        node.choices = [];
+    }
+    
+    const normalChoicesCount = Object.keys(node.branches).filter(k => !k.includes('_fake')).length;
+    
+    fakeChoices.forEach((choice, index) => {
+        const fakeIndex = normalChoicesCount + index;
+        const branchKey = `choice_${fakeIndex}_fake`;
+        
+        if (!node.branches[branchKey]) {
+            node.choices.push(choice);
+            node.branches[branchKey] = {
+                id: branchKey,
+                choiceText: choice,
+                isFakeChoice: true,
+                reconnectsTo: null,
+                messages: [],
+                choices: null,
+                branches: {}
+            };
+        }
+    });
+    
+    document.getElementById('fakeChoiceControls').classList.remove('active');
+    updateDisplay();
+}
+
+function cancelFakeChoice() {
+    document.getElementById('fakeChoiceControls').classList.remove('active');
+}
+
+// ============ GESTION DE LA RECONNEXION DES FAKE CHOICES ============
+function finishBranch() {
+    const node = getCurrentNode();
+    
+    // Vérifier si on est dans un fake choice
+    const currentBranchKey = currentPath[currentPath.length - 1];
+    if (currentBranchKey && currentBranchKey.includes('_fake')) {
+        showReconnectionDialog();
+    } else {
+        node.finished = true;
+        alert('Branche marquée comme terminée !');
+        updateDisplay();
+    }
+}
+
+function showReconnectionDialog() {
+    const finishFakeChoiceControls = document.getElementById('finishFakeChoiceControls');
+    const reconnectSelect = document.getElementById('reconnectSelect');
+    
+    // Remplir la liste des messages de la branche parent
+    reconnectSelect.innerHTML = '<option value="">-- Choisir un message --</option>';
+    
+    // Trouver le nœud parent (avant le fake choice)
+    const parentPath = currentPath.slice(0, -1);
+    let parentNode = dialogueTree.root;
+    for (let i = 1; i < parentPath.length; i++) {
+        parentNode = parentNode.branches[parentPath[i]];
+    }
+    
+    // Ajouter les messages du parent
+    parentNode.messages.forEach((msg, index) => {
+        const preview = msg.text.substring(0, 50) + (msg.text.length > 50 ? '...' : '');
+        reconnectSelect.innerHTML += `<option value="${msg.id}">Message ${msg.id}: ${preview}</option>`;
+    });
+    
+    finishFakeChoiceControls.classList.add('active');
+    setTimeout(() => {
+        finishFakeChoiceControls.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+}
+
+function saveReconnection() {
+    const reconnectSelect = document.getElementById('reconnectSelect');
+    const selectedMessageId = parseInt(reconnectSelect.value);
+    
+    if (!selectedMessageId) {
+        alert('Veuillez sélectionner un message de reconnexion.');
+        return;
+    }
+    
+    const node = getCurrentNode();
+    node.reconnectsTo = selectedMessageId;
+    node.finished = true;
+    
+    document.getElementById('finishFakeChoiceControls').classList.remove('active');
+    alert('Fake choice terminé et reconnecté !');
+    updateDisplay();
+}
+
+function cancelReconnection() {
+    document.getElementById('finishFakeChoiceControls').classList.remove('active');
+}
+
+// ============ ÉDITION DE MESSAGES ============
+function editMessage(messageId) {
+    const node = getCurrentNode();
+    const message = node.messages.find(m => m.id === messageId);
+    
+    if (!message) return;
+    
+    editingMessageId = messageId;
+    
+    const editMessageControls = document.getElementById('editMessageControls');
+    const editCharacterSelect = document.getElementById('editCharacterSelect');
+    const editMessageInput = document.getElementById('editMessageInput');
+    const editDatetimeInput = document.getElementById('editDatetimeInput');
+    
+    editCharacterSelect.value = message.character;
+    editMessageInput.value = message.text;
+    editDatetimeInput.value = message.datetime || '';
+    
+    editMessageControls.classList.add('active');
+    setTimeout(() => {
+        editMessageControls.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        editMessageInput.focus();
+    }, 100);
+}
+
+function saveEditedMessage() {
+    const node = getCurrentNode();
+    const message = node.messages.find(m => m.id === editingMessageId);
+    
+    if (!message) return;
+    
+    const editCharacterSelect = document.getElementById('editCharacterSelect');
+    const editMessageInput = document.getElementById('editMessageInput');
+    const editDatetimeInput = document.getElementById('editDatetimeInput');
+    
+    message.character = editCharacterSelect.value;
+    message.text = editMessageInput.value.trim();
+    message.datetime = editDatetimeInput.value || null;
+    
+    editingMessageId = null;
+    document.getElementById('editMessageControls').classList.remove('active');
+    updateDisplay();
+}
+
+function deleteMessage() {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer ce message ?')) return;
+    
+    const node = getCurrentNode();
+    const messageIndex = node.messages.findIndex(m => m.id === editingMessageId);
+    
+    if (messageIndex !== -1) {
+        node.messages.splice(messageIndex, 1);
+    }
+    
+    editingMessageId = null;
+    document.getElementById('editMessageControls').classList.remove('active');
+    updateDisplay();
+}
+
+function cancelEditMessage() {
+    editingMessageId = null;
+    document.getElementById('editMessageControls').classList.remove('active');
+}
+
+// ============ ÉDITION DE CHOIX ============
+function editChoice(choiceIndex) {
+    const node = getCurrentNode();
+    if (!node.choices || !node.choices[choiceIndex]) return;
+    
+    editingChoiceIndex = choiceIndex;
+    
+    const editChoiceControls = document.getElementById('editChoiceControls');
+    const editChoiceInput = document.getElementById('editChoiceInput');
+    
+    editChoiceInput.value = node.choices[choiceIndex];
+    
+    editChoiceControls.classList.add('active');
+    setTimeout(() => {
+        editChoiceControls.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        editChoiceInput.focus();
+    }, 100);
+}
+
+function saveEditedChoice() {
+    const node = getCurrentNode();
+    const editChoiceInput = document.getElementById('editChoiceInput');
+    const newText = editChoiceInput.value.trim();
+    
+    if (!newText) {
+        alert('Le texte du choix ne peut pas être vide.');
+        return;
+    }
+    
+    node.choices[editingChoiceIndex] = newText;
+    
+    // Mettre à jour aussi le texte dans la branche correspondante
+    const branchKeys = Object.keys(node.branches);
+    const normalChoices = branchKeys.filter(k => !k.includes('_fake'));
+    const fakeChoices = branchKeys.filter(k => k.includes('_fake'));
+    
+    let targetBranchKey;
+    if (editingChoiceIndex < normalChoices.length) {
+        targetBranchKey = `choice_${editingChoiceIndex}`;
+    } else {
+        targetBranchKey = fakeChoices[editingChoiceIndex - normalChoices.length];
+    }
+    
+    if (node.branches[targetBranchKey]) {
+        node.branches[targetBranchKey].choiceText = newText;
+    }
+    
+    editingChoiceIndex = null;
+    document.getElementById('editChoiceControls').classList.remove('active');
+    updateDisplay();
+}
+
+function cancelEditChoice() {
+    editingChoiceIndex = null;
+    document.getElementById('editChoiceControls').classList.remove('active');
+}
+
+// ============ GESTION DE L'IMPORTATION ============
 function showImportDialog() {
     const importControls = document.getElementById('importControls');
     importControls.classList.add('active');
     document.getElementById('importTextarea').value = '';
     document.getElementById('importAlert').innerHTML = '';
     
-    // Scroll vers l'import dialog
     setTimeout(() => {
         importControls.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 100);
 }
 
-// Annuler l'importation
 function cancelImport() {
     document.getElementById('importControls').classList.remove('active');
     document.getElementById('importTextarea').value = '';
     document.getElementById('importAlert').innerHTML = '';
 }
 
-// Importer le JSON
 function importJSON() {
     const textarea = document.getElementById('importTextarea');
     const jsonText = textarea.value.trim();
@@ -109,7 +432,6 @@ function importJSON() {
     try {
         const importedData = JSON.parse(jsonText);
         
-        // Vérifier que la structure est valide
         if (!importedData.root || typeof importedData.root !== 'object') {
             throw new Error('Structure JSON invalide : propriété "root" manquante');
         }
@@ -123,7 +445,6 @@ function importJSON() {
             throw new Error('Structure JSON invalide : "root.branches" doit être un objet');
         }
 
-        // Si on arrive ici, le JSON semble valide
         const confirmImport = confirm(
             'Voulez-vous vraiment importer ce dialogue ?\n' +
             'Cela remplacera complètement le dialogue actuel.\n\n' +
@@ -132,27 +453,16 @@ function importJSON() {
         );
 
         if (confirmImport) {
-            // Sauvegarder l'ancien dialogue au cas où
             const oldTree = JSON.stringify(dialogueTree);
             
             try {
-                // Importer le nouveau dialogue
                 dialogueTree = importedData;
                 currentPath = ['root'];
-                
-                // Mettre à jour le compteur d'ID des messages
                 updateMessageIdCounter();
-                
-                // Mettre à jour l'affichage
                 updateDisplay();
-                
-                // Masquer le dialogue d'importation
                 cancelImport();
-                
                 showAlert('exportAlert', 'Dialogue importé avec succès !', 'success');
-                
             } catch (error) {
-                // Restaurer l'ancien dialogue en cas d'erreur
                 dialogueTree = JSON.parse(oldTree);
                 throw error;
             }
@@ -164,7 +474,6 @@ function importJSON() {
     }
 }
 
-// Mettre à jour le compteur d'ID des messages
 function updateMessageIdCounter() {
     let maxId = 0;
     
@@ -188,39 +497,35 @@ function updateMessageIdCounter() {
     messageIdCounter = maxId;
 }
 
-// Copier le JSON dans le presse-papiers
+// ============ COPIE DANS LE PRESSE-PAPIERS ============
 async function copyToClipboard() {
     const jsonOutput = document.getElementById('jsonOutput');
     if (!jsonOutput.value) {
-        exportJSON(); // Générer le JSON s'il n'existe pas
+        exportJSON();
     }
     
     try {
         await navigator.clipboard.writeText(jsonOutput.value);
         showAlert('exportAlert', 'JSON copié dans le presse-papiers !', 'success');
     } catch (error) {
-        // Fallback pour les navigateurs plus anciens
         jsonOutput.select();
         document.execCommand('copy');
         showAlert('exportAlert', 'JSON copié dans le presse-papiers !', 'success');
     }
 }
 
-// Définir la date/heure actuelle
+// ============ GESTION DE LA DATE/HEURE ============
 function setCurrentDateTime() {
     const now = new Date();
     const datetimeInput = document.getElementById('datetimeInput');
-    // Format ISO pour datetime-local (YYYY-MM-DDTHH:mm)
     const isoString = now.toISOString().slice(0, 16);
     datetimeInput.value = isoString;
 }
 
-// Effacer la date/heure
 function clearDateTime() {
     document.getElementById('datetimeInput').value = '';
 }
 
-// Formater la date pour l'affichage
 function formatDateTime(isoString) {
     if (!isoString) return '';
     
@@ -236,7 +541,7 @@ function formatDateTime(isoString) {
     return date.toLocaleDateString('fr-FR', options);
 }
 
-// Mettre à jour l'affichage
+// ============ AFFICHAGE ============
 function updateDisplay() {
     const node = getCurrentNode();
     const messagesContainer = document.getElementById('messagesContainer');
@@ -246,13 +551,13 @@ function updateDisplay() {
     const statusMessage = document.getElementById('statusMessage');
     const pathInfo = document.getElementById('pathInfo');
     
-    // Mettre à jour le titre et le fil d'Ariane
     const pathDisplay = currentPath.map((step, index) => {
         if (step === 'root') return 'Racine';
         const parentNode = getNodeAtPath(currentPath.slice(0, index));
         if (parentNode && parentNode.choices) {
-            const choiceIndex = parseInt(step.replace('choice_', ''));
-            return `"${parentNode.choices[choiceIndex] || step}"`;
+            const choiceIndex = parseInt(step.replace('choice_', '').replace('_fake', ''));
+            const isFake = step.includes('_fake');
+            return (isFake ? '👻 ' : '') + `"${parentNode.choices[choiceIndex] || step}"`;
         }
         return step;
     }).join(' → ');
@@ -261,31 +566,56 @@ function updateDisplay() {
     breadcrumb.textContent = pathDisplay;
     backBtn.disabled = currentPath.length === 1;
     
-    // Mettre à jour les informations de chemin
     pathInfo.textContent = `Profondeur actuelle: ${currentPath.length - 1} | Messages dans cette branche: ${node.messages.length}`;
     
-    // Effacer les messages actuels
     messagesContainer.innerHTML = '';
     
-    // Afficher les messages de cette branche
     if (node.messages.length === 0) {
         statusMessage.textContent = 'Aucun message dans cette branche. Commencez à écrire...';
         messagesContainer.appendChild(statusMessage);
     } else {
-        node.messages.forEach(msg => {
-            displayMessage(msg);
-        });
+        // Trouver le point d'insertion des choix
+        let choiceInsertionPoint = node.messages.length;
         
-        // Afficher les choix s'il y en a
+        // Si ce nœud a des choix avec des fake choices, trouver le point de reconnexion minimum
+        if (node.choices && node.branches) {
+            let minReconnectId = Infinity;
+            
+            Object.keys(node.branches).forEach(branchKey => {
+                if (branchKey.includes('_fake') && node.branches[branchKey].reconnectsTo) {
+                    const reconnectId = node.branches[branchKey].reconnectsTo;
+                    if (reconnectId < minReconnectId) {
+                        minReconnectId = reconnectId;
+                    }
+                }
+            });
+            
+            // Trouver l'index du message de reconnexion
+            if (minReconnectId !== Infinity) {
+                const reconnectIndex = node.messages.findIndex(msg => msg.id === minReconnectId);
+                if (reconnectIndex !== -1) {
+                    choiceInsertionPoint = reconnectIndex;
+                }
+            }
+        }
+        
+        // Afficher les messages avant les choix
+        for (let i = 0; i < choiceInsertionPoint; i++) {
+            displayMessage(node.messages[i]);
+        }
+        
+        // Afficher les choix au bon endroit
         if (node.choices) {
             displayChoicesForSelection(node.choices);
         }
+        
+        // Afficher les messages après les choix
+        for (let i = choiceInsertionPoint; i < node.messages.length; i++) {
+            displayMessage(node.messages[i]);
+        }
     }
     
-    // Mettre à jour la vue de l'arbre
     updateTreeView();
-    
-    // Faire défiler vers le bas
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
@@ -301,13 +631,13 @@ function getNodeAtPath(path) {
     return node;
 }
 
-// Afficher un message
 function displayMessage(messageData) {
     const messagesContainer = document.getElementById('messagesContainer');
     const messageDiv = document.createElement('div');
     
     const isCharacterA = messageData.character === 'A';
     messageDiv.className = `message ${isCharacterA ? 'received' : 'sent'}`;
+    messageDiv.onclick = () => editMessage(messageData.id);
     
     let timestampHtml = '';
     if (messageData.datetime) {
@@ -328,7 +658,6 @@ function displayMessage(messageData) {
     messagesContainer.appendChild(messageDiv);
 }
 
-// Afficher les choix pour sélection
 function displayChoicesForSelection(choices) {
     const messagesContainer = document.getElementById('messagesContainer');
     const choicesDiv = document.createElement('div');
@@ -342,14 +671,20 @@ function displayChoicesForSelection(choices) {
     choices.forEach((choice, index) => {
         if (choice.trim()) {
             const node = getCurrentNode();
-            const branchExists = node.branches[`choice_${index}`] !== undefined;
+            const normalBranchKey = `choice_${index}`;
+            const fakeBranchKey = `choice_${index}_fake`;
+            
+            const branchExists = node.branches[normalBranchKey] || node.branches[fakeBranchKey];
+            const isFake = node.branches[fakeBranchKey] !== undefined;
             const selectedClass = branchExists ? 'selected' : '';
+            const fakeClass = isFake ? 'fake-choice' : '';
             
             choicesHtml += `
-                <div class="message-bubble choice-bubble ${selectedClass}" 
-                        onclick="selectChoice(${index})">
+                <div class="message-bubble choice-bubble ${selectedClass} ${fakeClass}" 
+                        onclick="event.stopPropagation(); selectChoice(${index})">
                     ${index + 1}. ${choice}
                     ${branchExists ? ' ✓' : ''}
+                    <span class="edit-icon" onclick="event.stopPropagation(); editChoice(${index})">✏️</span>
                 </div>
             `;
         }
@@ -360,7 +695,6 @@ function displayChoicesForSelection(choices) {
     messagesContainer.appendChild(choicesDiv);
 }
 
-// Ajouter un message
 function addMessage() {
     const messageInput = document.getElementById('messageInput');
     const characterSelect = document.getElementById('characterSelect');
@@ -380,85 +714,27 @@ function addMessage() {
         datetime: datetime || null
     };
     
-    // Ajouter le message au nœud actuel
     const node = getCurrentNode();
     node.messages.push(messageData);
     
-    // Réinitialiser les inputs
     messageInput.value = '';
-    
-    // Mettre à jour l'affichage
     updateDisplay();
 }
 
-// Ajouter un point de choix
-function addChoicePoint() {
-    const choiceControls = document.getElementById('choiceControls');
-    choiceControls.classList.add('active');
-    initializeChoices();
-    
-    // Scroll vers le dialogue de choix
-    setTimeout(() => {
-        choiceControls.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 100);
-}
-
-// Sauvegarder le point de choix
-function saveChoicePoint() {
-    const choicesList = document.getElementById('choicesList');
-    const choiceInputs = choicesList.querySelectorAll('input');
-    const choices = [];
-    
-    choiceInputs.forEach(input => {
-        const value = input.value.trim();
-        if (value) {
-            choices.push(value);
-        }
-    });
-    
-    if (choices.length < 2) {
-        alert('Veuillez entrer au moins 2 options de choix.');
-        return;
-    }
-    
-    // Ajouter les choix au nœud actuel
-    const node = getCurrentNode();
-    node.choices = choices;
-    
-    // Initialiser les branches vides pour chaque choix
-    choices.forEach((choice, index) => {
-        if (!node.branches[`choice_${index}`]) {
-            node.branches[`choice_${index}`] = {
-                id: `choice_${index}`,
-                choiceText: choice,
-                messages: [],
-                choices: null,
-                branches: {}
-            };
-        }
-    });
-    
-    // Réinitialiser et masquer les contrôles de choix
-    document.getElementById('choiceControls').classList.remove('active');
-    
-    // Mettre à jour l'affichage
-    updateDisplay();
-}
-
-function cancelChoice() {
-    document.getElementById('choiceControls').classList.remove('active');
-}
-
-// Sélectionner un choix et naviguer vers cette branche
 function selectChoice(index) {
     const node = getCurrentNode();
-    if (node.choices && node.branches[`choice_${index}`]) {
-        currentPath.push(`choice_${index}`);
+    const normalBranchKey = `choice_${index}`;
+    const fakeBranchKey = `choice_${index}_fake`;
+    
+    if (node.branches[normalBranchKey]) {
+        currentPath.push(normalBranchKey);
+        updateDisplay();
+    } else if (node.branches[fakeBranchKey]) {
+        currentPath.push(fakeBranchKey);
         updateDisplay();
     }
 }
 
-// Retourner à la branche précédente
 function goBack() {
     if (currentPath.length > 1) {
         currentPath.pop();
@@ -466,15 +742,7 @@ function goBack() {
     }
 }
 
-// Finir une branche (marquer comme terminée)
-function finishBranch() {
-    const node = getCurrentNode();
-    node.finished = true;
-    alert('Branche marquée comme terminée !');
-    updateDisplay();
-}
-
-// Mettre à jour la vue de l'arbre
+// ============ VUE DE L'ARBRE ============
 function updateTreeView() {
     const treeView = document.getElementById('treeView');
     treeView.innerHTML = '';
@@ -483,9 +751,9 @@ function updateTreeView() {
 
 function renderTreeNode(node, depth, container, path) {
     const nodeDiv = document.createElement('div');
-    nodeDiv.className = 'tree-node';
+    const isFake = path[path.length - 1] && path[path.length - 1].includes('_fake');
+    nodeDiv.className = `tree-node ${isFake ? 'fake-choice-node' : ''}`;
     
-    // Marquer le chemin actuel
     if (arraysEqual(path, currentPath)) {
         nodeDiv.classList.add('current-path');
     }
@@ -498,14 +766,17 @@ function renderTreeNode(node, depth, container, path) {
     }
     
     const depthIndicator = '└─'.repeat(depth);
+    const fakeIcon = isFake ? '👻 ' : '';
+    const reconnectInfo = node.reconnectsTo ? ` ↪️${node.reconnectsTo}` : '';
     
     nodeDiv.innerHTML = `
         <div class="tree-message">
             <span>
                 <span class="tree-depth-indicator">${depthIndicator}</span>
-                ${nodeText} (${node.messages.length} msg${node.messages.length !== 1 ? 's' : ''})
+                ${fakeIcon}${nodeText} (${node.messages.length} msg${node.messages.length !== 1 ? 's' : ''})
                 ${node.finished ? ' ✅' : ''}
                 ${node.choices ? ` [${node.choices.length} choix]` : ''}
+                ${reconnectInfo}
             </span>
             <small style="color: #999;">Prof. ${depth}</small>
         </div>
@@ -520,16 +791,24 @@ function renderTreeNode(node, depth, container, path) {
     
     container.appendChild(nodeDiv);
     
-    // Afficher les branches enfants
     if (node.choices && node.branches) {
         node.choices.forEach((choice, index) => {
-            const choiceKey = `choice_${index}`;
-            if (node.branches[choiceKey]) {
+            const normalKey = `choice_${index}`;
+            const fakeKey = `choice_${index}_fake`;
+            
+            if (node.branches[normalKey]) {
                 renderTreeNode(
-                    node.branches[choiceKey], 
+                    node.branches[normalKey], 
                     depth + 1, 
                     container, 
-                    [...path, choiceKey]
+                    [...path, normalKey]
+                );
+            } else if (node.branches[fakeKey]) {
+                renderTreeNode(
+                    node.branches[fakeKey], 
+                    depth + 1, 
+                    container, 
+                    [...path, fakeKey]
                 );
             }
         });
@@ -540,7 +819,7 @@ function arraysEqual(a, b) {
     return a.length === b.length && a.every((val, i) => val === b[i]);
 }
 
-// Effacer tout
+// ============ EFFACER TOUT ============
 function clearAll() {
     if (confirm('Êtes-vous sûr de vouloir effacer tout l\'arbre de dialogue ?')) {
         dialogueTree = {
@@ -559,7 +838,7 @@ function clearAll() {
     }
 }
 
-// Exporter en JSON
+// ============ EXPORTER EN JSON ============
 function exportJSON() {
     const jsonOutput = document.getElementById('jsonOutput');
     const formattedJSON = JSON.stringify(dialogueTree, null, 2);
@@ -567,12 +846,12 @@ function exportJSON() {
     showAlert('exportAlert', 'JSON exporté avec succès !', 'success');
 }
 
-// Permettre d'envoyer avec Entrée
+// ============ INITIALISATION ============
 document.getElementById('messageInput').addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
         addMessage();
     }
 });
 
-// Initialiser l'affichage
 updateDisplay();

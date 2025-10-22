@@ -3,7 +3,8 @@ let dialogueTree = {
     root: {
         id: 'root',
         messages: [],
-        choices: null,
+        choices: null,        // VRAIS CHOICES uniquement
+        fakeChoices: null,    // FAKE CHOICES uniquement
         branches: {}
     }
 };
@@ -14,6 +15,7 @@ let messageIdCounter = 0;
 let choiceCounter = 0;
 let editingMessageId = null;
 let editingChoiceIndex = null;
+let editingIsFakeChoice = false;
 
 // Obtenir le nœud actuel
 function getCurrentNode() {
@@ -33,7 +35,7 @@ function showAlert(containerId, message, type = 'info') {
     }, 5000);
 }
 
-// ============ GESTION DES CHOIX NORMAUX ============
+// ============ GESTION DES CHOIX NORMAUX (VRAIS) ============
 function addNewChoice() {
     const choicesList = document.getElementById('choicesList');
     const choiceIndex = choicesList.children.length;
@@ -99,15 +101,17 @@ function saveChoicePoint() {
     }
     
     const node = getCurrentNode();
-    node.choices = choices;
+    node.choices = choices; // Liste des VRAIS choix uniquement
     
     choices.forEach((choice, index) => {
-        if (!node.branches[`choice_${index}`]) {
-            node.branches[`choice_${index}`] = {
-                id: `choice_${index}`,
+        const branchKey = `choice_${index}`;
+        if (!node.branches[branchKey]) {
+            node.branches[branchKey] = {
+                id: branchKey,
                 choiceText: choice,
                 messages: [],
                 choices: null,
+                fakeChoices: null,
                 branches: {}
             };
         }
@@ -186,28 +190,28 @@ function saveFakeChoicePoint() {
     }
     
     const node = getCurrentNode();
-    if (!node.choices) {
-        node.choices = [];
+    
+    // Initialiser fakeChoices si nécessaire
+    if (!node.fakeChoices) {
+        node.fakeChoices = [];
     }
     
-    const normalChoicesCount = Object.keys(node.branches).filter(k => !k.includes('_fake')).length;
-    
+    // Ajouter les nouveaux fake choices
     fakeChoices.forEach((choice, index) => {
-        const fakeIndex = normalChoicesCount + index;
-        const branchKey = `choice_${fakeIndex}_fake`;
+        const fakeIndex = node.fakeChoices.length;
+        const branchKey = `fake_${fakeIndex}`;
         
-        if (!node.branches[branchKey]) {
-            node.choices.push(choice);
-            node.branches[branchKey] = {
-                id: branchKey,
-                choiceText: choice,
-                isFakeChoice: true,
-                reconnectsTo: null,
-                messages: [],
-                choices: null,
-                branches: {}
-            };
-        }
+        node.fakeChoices.push(choice);
+        node.branches[branchKey] = {
+            id: branchKey,
+            choiceText: choice,
+            isFakeChoice: true,
+            reconnectsTo: null,
+            messages: [],
+            choices: null,
+            fakeChoices: null,
+            branches: {}
+        };
     });
     
     document.getElementById('fakeChoiceControls').classList.remove('active');
@@ -224,7 +228,7 @@ function finishBranch() {
     
     // Vérifier si on est dans un fake choice
     const currentBranchKey = currentPath[currentPath.length - 1];
-    if (currentBranchKey && currentBranchKey.includes('_fake')) {
+    if (currentBranchKey && currentBranchKey.startsWith('fake_')) {
         showReconnectionDialog();
     } else {
         node.finished = true;
@@ -346,16 +350,29 @@ function cancelEditMessage() {
 }
 
 // ============ ÉDITION DE CHOIX ============
-function editChoice(choiceIndex) {
+function editChoice(choiceIndex, isFake = false) {
     const node = getCurrentNode();
-    if (!node.choices || !node.choices[choiceIndex]) return;
+    
+    if (isFake) {
+        if (!node.fakeChoices || !node.fakeChoices[choiceIndex]) return;
+    } else {
+        if (!node.choices || !node.choices[choiceIndex]) return;
+    }
     
     editingChoiceIndex = choiceIndex;
+    editingIsFakeChoice = isFake;
     
     const editChoiceControls = document.getElementById('editChoiceControls');
     const editChoiceInput = document.getElementById('editChoiceInput');
+    const editChoiceTitle = editChoiceControls.querySelector('h4');
     
-    editChoiceInput.value = node.choices[choiceIndex];
+    if (isFake) {
+        editChoiceInput.value = node.fakeChoices[choiceIndex];
+        editChoiceTitle.textContent = '✏️ Éditer le fake choice';
+    } else {
+        editChoiceInput.value = node.choices[choiceIndex];
+        editChoiceTitle.textContent = '✏️ Éditer le choix';
+    }
     
     editChoiceControls.classList.add('active');
     setTimeout(() => {
@@ -374,31 +391,31 @@ function saveEditedChoice() {
         return;
     }
     
-    node.choices[editingChoiceIndex] = newText;
-    
-    // Mettre à jour aussi le texte dans la branche correspondante
-    const branchKeys = Object.keys(node.branches);
-    const normalChoices = branchKeys.filter(k => !k.includes('_fake'));
-    const fakeChoices = branchKeys.filter(k => k.includes('_fake'));
-    
-    let targetBranchKey;
-    if (editingChoiceIndex < normalChoices.length) {
-        targetBranchKey = `choice_${editingChoiceIndex}`;
+    if (editingIsFakeChoice) {
+        // Modifier le fake choice
+        node.fakeChoices[editingChoiceIndex] = newText;
+        const branchKey = `fake_${editingChoiceIndex}`;
+        if (node.branches[branchKey]) {
+            node.branches[branchKey].choiceText = newText;
+        }
     } else {
-        targetBranchKey = fakeChoices[editingChoiceIndex - normalChoices.length];
-    }
-    
-    if (node.branches[targetBranchKey]) {
-        node.branches[targetBranchKey].choiceText = newText;
+        // Modifier le vrai choice
+        node.choices[editingChoiceIndex] = newText;
+        const branchKey = `choice_${editingChoiceIndex}`;
+        if (node.branches[branchKey]) {
+            node.branches[branchKey].choiceText = newText;
+        }
     }
     
     editingChoiceIndex = null;
+    editingIsFakeChoice = false;
     document.getElementById('editChoiceControls').classList.remove('active');
     updateDisplay();
 }
 
 function cancelEditChoice() {
     editingChoiceIndex = null;
+    editingIsFakeChoice = false;
     document.getElementById('editChoiceControls').classList.remove('active');
 }
 
@@ -554,10 +571,17 @@ function updateDisplay() {
     const pathDisplay = currentPath.map((step, index) => {
         if (step === 'root') return 'Racine';
         const parentNode = getNodeAtPath(currentPath.slice(0, index));
-        if (parentNode && parentNode.choices) {
-            const choiceIndex = parseInt(step.replace('choice_', '').replace('_fake', ''));
-            const isFake = step.includes('_fake');
-            return (isFake ? '👻 ' : '') + `"${parentNode.choices[choiceIndex] || step}"`;
+        if (parentNode) {
+            // Fake choice
+            if (step.startsWith('fake_')) {
+                const fakeIndex = parseInt(step.replace('fake_', ''));
+                return '👻 "' + (parentNode.fakeChoices[fakeIndex] || step) + '"';
+            }
+            // Vrai choice
+            if (step.startsWith('choice_')) {
+                const choiceIndex = parseInt(step.replace('choice_', ''));
+                return '"' + (parentNode.choices[choiceIndex] || step) + '"';
+            }
         }
         return step;
     }).join(' → ');
@@ -570,19 +594,19 @@ function updateDisplay() {
     
     messagesContainer.innerHTML = '';
     
-    if (node.messages.length === 0) {
+    if (node.messages.length === 0 && !node.choices && !node.fakeChoices) {
         statusMessage.textContent = 'Aucun message dans cette branche. Commencez à écrire...';
         messagesContainer.appendChild(statusMessage);
     } else {
-        // Trouver le point d'insertion des choix
-        let choiceInsertionPoint = node.messages.length;
+        // Trouver le point d'insertion des fake choices
+        let fakeChoiceInsertionPoint = node.messages.length;
         
-        // Si ce nœud a des choix avec des fake choices, trouver le point de reconnexion minimum
-        if (node.choices && node.branches) {
+        if (node.fakeChoices && node.branches) {
             let minReconnectId = Infinity;
             
+            // Vérifier s'il y a des fake choices avec reconnexion
             Object.keys(node.branches).forEach(branchKey => {
-                if (branchKey.includes('_fake') && node.branches[branchKey].reconnectsTo) {
+                if (branchKey.startsWith('fake_') && node.branches[branchKey].reconnectsTo) {
                     const reconnectId = node.branches[branchKey].reconnectsTo;
                     if (reconnectId < minReconnectId) {
                         minReconnectId = reconnectId;
@@ -590,28 +614,35 @@ function updateDisplay() {
                 }
             });
             
-            // Trouver l'index du message de reconnexion
+            // Si on a des fake choices avec reconnexion, insérer avant le point de reconnexion
             if (minReconnectId !== Infinity) {
                 const reconnectIndex = node.messages.findIndex(msg => msg.id === minReconnectId);
                 if (reconnectIndex !== -1) {
-                    choiceInsertionPoint = reconnectIndex;
+                    fakeChoiceInsertionPoint = reconnectIndex;
                 }
             }
         }
         
-        // Afficher les messages avant les choix
-        for (let i = 0; i < choiceInsertionPoint; i++) {
+        // Afficher les messages avant les fake choices
+        for (let i = 0; i < fakeChoiceInsertionPoint; i++) {
             displayMessage(node.messages[i]);
         }
         
-        // Afficher les choix au bon endroit
-        if (node.choices) {
-            displayChoicesForSelection(node.choices);
+        // Afficher les FAKE CHOICES au bon endroit
+        if (node.fakeChoices && node.fakeChoices.length > 0) {
+            displayFakeChoicesForSelection(node.fakeChoices);
         }
         
-        // Afficher les messages après les choix
-        for (let i = choiceInsertionPoint; i < node.messages.length; i++) {
-            displayMessage(node.messages[i]);
+        // Afficher les messages après les fake choices
+        if (fakeChoiceInsertionPoint < node.messages.length) {
+            for (let i = fakeChoiceInsertionPoint; i < node.messages.length; i++) {
+                displayMessage(node.messages[i]);
+            }
+        }
+        
+        // Afficher les VRAIS CHOICES à la fin (toujours)
+        if (node.choices && node.choices.length > 0) {
+            displayRealChoicesForSelection(node.choices);
         }
     }
     
@@ -658,33 +689,64 @@ function displayMessage(messageData) {
     messagesContainer.appendChild(messageDiv);
 }
 
-function displayChoicesForSelection(choices) {
+// AFFICHAGE DES FAKE CHOICES
+function displayFakeChoicesForSelection(fakeChoices) {
     const messagesContainer = document.getElementById('messagesContainer');
     const choicesDiv = document.createElement('div');
     choicesDiv.className = 'message sent';
     
     let choicesHtml = `
         <div>
-            <div class="character-label">Choix disponibles</div>
+            <div class="character-label">👻 Fake Choices (illusion de choix)</div>
+    `;
+    
+    fakeChoices.forEach((choice, index) => {
+        if (choice.trim()) {
+            const node = getCurrentNode();
+            const branchKey = `fake_${index}`;
+            const branchExists = node.branches[branchKey] !== undefined;
+            const selectedClass = branchExists ? 'selected' : '';
+            
+            choicesHtml += `
+                <div class="message-bubble choice-bubble fake-choice ${selectedClass}" 
+                        onclick="event.stopPropagation(); selectFakeChoice(${index})">
+                    👻 ${index + 1}. ${choice}
+                    ${branchExists ? ' ✓' : ''}
+                    <span class="edit-icon" onclick="event.stopPropagation(); editChoice(${index}, true)">✏️</span>
+                </div>
+            `;
+        }
+    });
+    
+    choicesHtml += '</div>';
+    choicesDiv.innerHTML = choicesHtml;
+    messagesContainer.appendChild(choicesDiv);
+}
+
+// AFFICHAGE DES VRAIS CHOICES
+function displayRealChoicesForSelection(choices) {
+    const messagesContainer = document.getElementById('messagesContainer');
+    const choicesDiv = document.createElement('div');
+    choicesDiv.className = 'message sent';
+    
+    let choicesHtml = `
+        <div>
+            <div class="character-label">✅ Choix réels (impact sur l'histoire)</div>
     `;
     
     choices.forEach((choice, index) => {
         if (choice.trim()) {
             const node = getCurrentNode();
-            const normalBranchKey = `choice_${index}`;
-            const fakeBranchKey = `choice_${index}_fake`;
-            
-            const branchExists = node.branches[normalBranchKey] || node.branches[fakeBranchKey];
-            const isFake = node.branches[fakeBranchKey] !== undefined;
+            const branchKey = `choice_${index}`;
+            const branchExists = node.branches[branchKey] !== undefined;
             const selectedClass = branchExists ? 'selected' : '';
-            const fakeClass = isFake ? 'fake-choice' : '';
             
             choicesHtml += `
-                <div class="message-bubble choice-bubble ${selectedClass} ${fakeClass}" 
-                        onclick="event.stopPropagation(); selectChoice(${index})">
+                <div class="message-bubble choice-bubble real-choice ${selectedClass}" 
+                        onclick="event.stopPropagation(); selectRealChoice(${index})">
                     ${index + 1}. ${choice}
                     ${branchExists ? ' ✓' : ''}
-                    <span class="edit-icon" onclick="event.stopPropagation(); editChoice(${index})">✏️</span>
+                    <span class="edit-icon" onclick="event.stopPropagation(); editChoice(${index}, false)">✏️</span>
                 </div>
             `;
         }
@@ -721,16 +783,24 @@ function addMessage() {
     updateDisplay();
 }
 
-function selectChoice(index) {
+// SÉLECTION FAKE CHOICE
+function selectFakeChoice(index) {
     const node = getCurrentNode();
-    const normalBranchKey = `choice_${index}`;
-    const fakeBranchKey = `choice_${index}_fake`;
+    const branchKey = `fake_${index}`;
     
-    if (node.branches[normalBranchKey]) {
-        currentPath.push(normalBranchKey);
+    if (node.branches[branchKey]) {
+        currentPath.push(branchKey);
         updateDisplay();
-    } else if (node.branches[fakeBranchKey]) {
-        currentPath.push(fakeBranchKey);
+    }
+}
+
+// SÉLECTION VRAI CHOICE
+function selectRealChoice(index) {
+    const node = getCurrentNode();
+    const branchKey = `choice_${index}`;
+    
+    if (node.branches[branchKey]) {
+        currentPath.push(branchKey);
         updateDisplay();
     }
 }
@@ -751,17 +821,18 @@ function updateTreeView() {
 
 function renderTreeNode(node, depth, container, path) {
     const nodeDiv = document.createElement('div');
-    const isFake = path[path.length - 1] && path[path.length - 1].includes('_fake');
+    const currentBranchKey = path[path.length - 1];
+    const isFake = currentBranchKey && currentBranchKey.startsWith('fake_');
     nodeDiv.className = `tree-node ${isFake ? 'fake-choice-node' : ''}`;
     
     if (arraysEqual(path, currentPath)) {
         nodeDiv.classList.add('current-path');
     }
     
-    let nodeText = path[path.length - 1];
+    let nodeText = currentBranchKey;
     if (node.choiceText) {
         nodeText = `${node.choiceText.substring(0, 50)}${node.choiceText.length > 50 ? '...' : ''}`;
-    } else if (path[path.length - 1] === 'root') {
+    } else if (currentBranchKey === 'root') {
         nodeText = 'Racine';
     }
     
@@ -769,13 +840,26 @@ function renderTreeNode(node, depth, container, path) {
     const fakeIcon = isFake ? '👻 ' : '';
     const reconnectInfo = node.reconnectsTo ? ` ↪️${node.reconnectsTo}` : '';
     
+    const totalRealChoices = node.choices ? node.choices.length : 0;
+    const totalFakeChoices = node.fakeChoices ? node.fakeChoices.length : 0;
+    const realBranches = node.branches ? Object.keys(node.branches).filter(k => k.startsWith('choice_')).length : 0;
+    const fakeBranches = node.branches ? Object.keys(node.branches).filter(k => k.startsWith('fake_')).length : 0;
+    
+    let choicesInfo = '';
+    if (totalRealChoices > 0 || totalFakeChoices > 0) {
+        const parts = [];
+        if (totalRealChoices > 0) parts.push(`${totalRealChoices} choix`);
+        if (totalFakeChoices > 0) parts.push(`${totalFakeChoices} fake`);
+        choicesInfo = ` [${parts.join(' + ')}]`;
+    }
+    
     nodeDiv.innerHTML = `
         <div class="tree-message">
             <span>
                 <span class="tree-depth-indicator">${depthIndicator}</span>
                 ${fakeIcon}${nodeText} (${node.messages.length} msg${node.messages.length !== 1 ? 's' : ''})
                 ${node.finished ? ' ✅' : ''}
-                ${node.choices ? ` [${node.choices.length} choix]` : ''}
+                ${choicesInfo}
                 ${reconnectInfo}
             </span>
             <small style="color: #999;">Prof. ${depth}</small>
@@ -791,26 +875,40 @@ function renderTreeNode(node, depth, container, path) {
     
     container.appendChild(nodeDiv);
     
-    if (node.choices && node.branches) {
-        node.choices.forEach((choice, index) => {
-            const normalKey = `choice_${index}`;
-            const fakeKey = `choice_${index}_fake`;
-            
-            if (node.branches[normalKey]) {
-                renderTreeNode(
-                    node.branches[normalKey], 
-                    depth + 1, 
-                    container, 
-                    [...path, normalKey]
-                );
-            } else if (node.branches[fakeKey]) {
-                renderTreeNode(
-                    node.branches[fakeKey], 
-                    depth + 1, 
-                    container, 
-                    [...path, fakeKey]
-                );
-            }
+    // Afficher les branches dans l'ordre : vrais choix d'abord, puis fake choices
+    if (node.branches) {
+        const branchKeys = Object.keys(node.branches);
+        
+        // D'abord les vrais choix
+        const realChoiceKeys = branchKeys.filter(k => k.startsWith('choice_')).sort((a, b) => {
+            const numA = parseInt(a.replace('choice_', ''));
+            const numB = parseInt(b.replace('choice_', ''));
+            return numA - numB;
+        });
+        
+        realChoiceKeys.forEach(branchKey => {
+            renderTreeNode(
+                node.branches[branchKey], 
+                depth + 1, 
+                container, 
+                [...path, branchKey]
+            );
+        });
+        
+        // Ensuite les fake choices
+        const fakeChoiceKeys = branchKeys.filter(k => k.startsWith('fake_')).sort((a, b) => {
+            const numA = parseInt(a.replace('fake_', ''));
+            const numB = parseInt(b.replace('fake_', ''));
+            return numA - numB;
+        });
+        
+        fakeChoiceKeys.forEach(branchKey => {
+            renderTreeNode(
+                node.branches[branchKey], 
+                depth + 1, 
+                container, 
+                [...path, branchKey]
+            );
         });
     }
 }
@@ -827,6 +925,7 @@ function clearAll() {
                 id: 'root',
                 messages: [],
                 choices: null,
+                fakeChoices: null,
                 branches: {}
             }
         };

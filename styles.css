@@ -121,28 +121,31 @@ body {
 }
 
 .choice-bubble {
-    background: #FFE066 !important;
-    color: #333 !important;
-    border: 2px solid #FFA500;
+    background: #4CAF50 !important;
+    color: white !important;
+    border: 2px solid #45a049;
     margin: 5px 0;
     cursor: pointer;
     transition: all 0.2s;
     position: relative;
+    font-weight: 500;
 }
 
 .choice-bubble:hover {
-    background: #FFD700 !important;
+    background: #45a049 !important;
     transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
 }
 
 .choice-bubble.selected {
-    background: #32CD32 !important;
+    background: #2E7D32 !important;
     color: white !important;
-    border-color: #228B22;
+    border-color: #1B5E20;
 }
 
 .choice-bubble.fake-choice {
     background: #FF9966 !important;
+    color: #333 !important;
     border: 2px dashed #FF6633;
     position: relative;
 }
@@ -677,4 +680,19 @@ body {
     .datetime-input {
         min-width: unset;
     }
+}
+/* Distinction visuelle entre vrais choices et fake choices */
+.choice-bubble.real-choice {
+    background: #4CAF50 !important;
+    color: white !important;
+    border: 2px solid #45a049;
+}
+
+.choice-bubble.real-choice:hover {
+    background: #45a049 !important;
+}
+
+.choice-bubble.real-choice.selected {
+    background: #2E7D32 !important;
+    border-color: #1B5E20;
 }
